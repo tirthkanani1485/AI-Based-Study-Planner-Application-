@@ -1,130 +1,116 @@
+import streamlit as st
 import pandas as pd
-import gradio as gr
 import os
 
+# ------------------------------
+# File Storage
+# ------------------------------
 FILE = "tasks.csv"
 
-# ------------------------------
-# Load Data (Persistent Storage)
-# ------------------------------
+# Load data
 if os.path.exists(FILE):
     tasks_df = pd.read_csv(FILE)
 else:
     tasks_df = pd.DataFrame(columns=["Task", "Priority", "Due Date", "Status"])
 
-
-# ------------------------------
-# Save Function
-# ------------------------------
+# Save function
 def save_data():
     tasks_df.to_csv(FILE, index=False)
 
+# ------------------------------
+# UI Title
+# ------------------------------
+st.title("📚 AI-Based Study Planner")
+
+# ------------------------------
+# Sidebar Navigation
+# ------------------------------
+menu = st.sidebar.selectbox(
+    "Menu",
+    ["Add Task", "Complete Task", "View Tasks", "Generate Plan"]
+)
 
 # ------------------------------
 # Add Task
 # ------------------------------
-def add_task(task, priority, due_date):
-    global tasks_df
+if menu == "Add Task":
+    st.subheader("➕ Add New Task")
 
-    new_task = pd.DataFrame({
-        "Task": [task],
-        "Priority": [priority],
-        "Due Date": [due_date],
-        "Status": ["Pending"]
-    })
+    task = st.text_input("Task Name")
+    priority = st.selectbox("Priority", ["High", "Medium", "Low"])
+    due_date = st.date_input("Due Date")
 
-    tasks_df = pd.concat([tasks_df, new_task], ignore_index=True)
-    save_data()
+    if st.button("Add Task"):
+        if task:
+            new_task = pd.DataFrame({
+                "Task": [task],
+                "Priority": [priority],
+                "Due Date": [str(due_date)],
+                "Status": ["Pending"]
+            })
 
-    return "✅ Task Added!", tasks_df
+            tasks_df = pd.concat([tasks_df, new_task], ignore_index=True)
+            save_data()
 
+            st.success("✅ Task Added Successfully!")
+        else:
+            st.error("❌ Please enter task name")
 
 # ------------------------------
 # Complete Task
 # ------------------------------
-def complete_task(task_name):
-    global tasks_df
+elif menu == "Complete Task":
+    st.subheader("✅ Mark Task Complete")
 
-    if task_name in tasks_df["Task"].values:
-        tasks_df.loc[tasks_df["Task"] == task_name, "Status"] = "Completed"
-        save_data()
-        return f"✅ {task_name} completed!", tasks_df
+    task_name = st.text_input("Enter Task Name")
 
-    return "❌ Task not found!", tasks_df
-
+    if st.button("Complete Task"):
+        if task_name in tasks_df["Task"].values:
+            tasks_df.loc[tasks_df["Task"] == task_name, "Status"] = "Completed"
+            save_data()
+            st.success(f"✅ {task_name} marked as completed")
+        else:
+            st.error("❌ Task not found")
 
 # ------------------------------
 # View Tasks
 # ------------------------------
-def view_tasks():
-    return tasks_df
+elif menu == "View Tasks":
+    st.subheader("📋 All Tasks")
 
+    if tasks_df.empty:
+        st.info("No tasks available")
+    else:
+        st.dataframe(tasks_df)
 
 # ------------------------------
 # Generate Study Plan
 # ------------------------------
-def generate_plan():
-    global tasks_df
+elif menu == "Generate Plan":
+    st.subheader("🧠 AI Study Plan")
 
     pending = tasks_df[tasks_df["Status"] == "Pending"]
 
     if pending.empty:
-        return "🎉 All tasks completed!"
+        st.success("🎉 All tasks completed!")
+    else:
+        priority_order = {"High": 1, "Medium": 2, "Low": 3}
 
-    priority_order = {"High": 1, "Medium": 2, "Low": 3}
+        pending = pending.copy()
+        pending["Priority Rank"] = pending["Priority"].map(priority_order)
+        pending = pending.sort_values(by=["Priority Rank", "Due Date"])
 
-    pending = pending.copy()
-    pending["Priority Rank"] = pending["Priority"].map(priority_order)
-    pending = pending.sort_values(by=["Priority Rank", "Due Date"])
+        time_slots = ["Morning", "Afternoon", "Evening"]
 
-    plan = "📘 Study Plan:\n\n"
-    slots = ["Morning", "Afternoon", "Evening"]
+        st.write("### 📘 Your Study Plan:")
 
-    for i, (_, row) in enumerate(pending.iterrows()):
-        plan += f"{slots[i % 3]} → {row['Task']} (Due: {row['Due Date']})\n"
-
-    return plan
-
-
-# ------------------------------
-# UI
-# ------------------------------
-with gr.Blocks() as app:
-    gr.Markdown("# 📚 AI Study Planner")
-
-    with gr.Tab("Add Task"):
-        task = gr.Textbox(label="Task")
-        priority = gr.Dropdown(["High", "Medium", "Low"])
-        date = gr.Textbox(label="Due Date")
-
-        btn = gr.Button("Add")
-        out = gr.Textbox()
-        table = gr.Dataframe()
-
-        btn.click(add_task, [task, priority, date], [out, table])
-
-    with gr.Tab("Complete Task"):
-        task_name = gr.Textbox(label="Task Name")
-        btn2 = gr.Button("Complete")
-        out2 = gr.Textbox()
-        table2 = gr.Dataframe()
-
-        btn2.click(complete_task, [task_name], [out2, table2])
-
-    with gr.Tab("View Tasks"):
-        btn3 = gr.Button("Refresh")
-        table3 = gr.Dataframe()
-
-        btn3.click(view_tasks, outputs=table3)
-
-    with gr.Tab("Generate Plan"):
-        btn4 = gr.Button("Generate")
-        plan = gr.Textbox(lines=10)
-
-        btn4.click(generate_plan, outputs=plan)
-
+        for i, (_, row) in enumerate(pending.iterrows()):
+            st.write(
+                f"👉 {time_slots[i % 3]} → {row['Task']} "
+                f"(Priority: {row['Priority']}, Due: {row['Due Date']})"
+            )
 
 # ------------------------------
-# Launch (IMPORTANT)
+# Footer
 # ------------------------------
-app.launch(server_name="0.0.0.0", server_port=7860)
+st.sidebar.markdown("🚀 Made with Streamlit")
